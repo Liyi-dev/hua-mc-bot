@@ -119,7 +119,7 @@ Bot 断线后会自动重连，采用**指数退避**策略：
 示例 — 添加 `!jump` 指令：
 
 ```typescript
-// src/modules/action.ts
+// 新建文件 src/modules/action.ts
 import { registerCommand } from "./chat";
 
 export function setupAction(bot: Bot): void {

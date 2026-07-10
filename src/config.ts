@@ -1,11 +1,11 @@
 import dotenv from "dotenv";
 
-// Load .env before reading config values
+// 读取配置前先加载 .env
 dotenv.config();
 
 export interface ReconnectConfig {
   enabled: boolean;
-  maxAttempts: number; // -1 = infinite
+  maxAttempts: number; // -1 表示无限重试
   baseDelayMs: number;
   maxDelayMs: number;
 }
@@ -18,6 +18,14 @@ export interface Config {
   version: string | false;
   commandPrefix: string;
   reconnect: ReconnectConfig;
+  mcp: McpConfig;
+}
+
+export interface McpConfig {
+  enabled: boolean;
+  host: string;
+  port: number;
+  transport: "http" | "stdio" | "both";
 }
 
 function requireEnv(key: string): string {
@@ -55,5 +63,18 @@ export function loadConfig(): Config {
       baseDelayMs: parseOptionalInt(process.env.RECONNECT_BASE_DELAY_MS, 1000),
       maxDelayMs: parseOptionalInt(process.env.RECONNECT_MAX_DELAY_MS, 60000),
     },
+    mcp: {
+      enabled: process.env.MCP_ENABLED !== "false",
+      host: process.env.MCP_HOST || "127.0.0.1",
+      port: parseOptionalInt(process.env.MCP_PORT, 3100),
+      transport: parseMcpTransport(process.env.MCP_TRANSPORT),
+    },
   };
+}
+
+function parseMcpTransport(value: string | undefined): McpConfig["transport"] {
+  if (value === "stdio" || value === "both") {
+    return value;
+  }
+  return "http";
 }

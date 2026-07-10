@@ -1,68 +1,56 @@
 import { Bot } from "mineflayer";
-import { goals } from "mineflayer-pathfinder";
+import {
+  BotActionError,
+  comeToPlayer,
+  followPlayer,
+  stopMovement,
+} from "../actions/bot-actions";
 import { registerCommand } from "./chat";
 
-/**
- * Check whether pathfinder is available on this bot instance.
- */
-function hasPathfinder(bot: Bot): boolean {
-  return !!bot.pathfinder;
-}
+let commandsRegistered = false;
 
 /**
- * Register movement chat commands. `pathfinderAvailable` should reflect
- * whether the pathfinder plugin was successfully loaded at startup.
+ * 注册移动类聊天指令。`pathfinderAvailable` 表示启动时
+ * pathfinder 插件是否已成功加载。
  */
 export function setupMovement(bot: Bot, pathfinderAvailable: boolean): void {
   if (!pathfinderAvailable) {
     console.log("[movement] Pathfinder not available — movement commands will reply with errors");
   }
 
-  registerCommand("come", (ctx) => {
-    if (!hasPathfinder(ctx.bot)) {
-      ctx.bot.chat("Pathfinder not available.");
-      return;
-    }
+  if (!commandsRegistered) {
+    registerCommand("come", (ctx) => {
+      try {
+        comeToPlayer(ctx.bot, ctx.username);
+        ctx.bot.chat(`Coming to you, ${ctx.username}!`);
+      } catch (err) {
+        const msg = err instanceof BotActionError ? err.message : "Pathfinder not available.";
+        ctx.bot.chat(msg);
+      }
+    });
 
-    const player = ctx.bot.players[ctx.username];
-    if (!player?.entity) {
-      ctx.bot.chat(`I can't see you, ${ctx.username}.`);
-      return;
-    }
+    registerCommand("follow", (ctx) => {
+      const targetName = ctx.args[0];
+      if (!targetName) {
+        ctx.bot.chat("Usage: !follow <player>");
+        return;
+      }
 
-    ctx.bot.pathfinder.setGoal(new goals.GoalFollow(player.entity, 2), true);
-    ctx.bot.chat(`Coming to you, ${ctx.username}!`);
-  });
+      try {
+        followPlayer(ctx.bot, targetName);
+        ctx.bot.chat(`Following ${targetName}.`);
+      } catch (err) {
+        const msg = err instanceof BotActionError ? err.message : `Can't see player: ${targetName}`;
+        ctx.bot.chat(msg);
+      }
+    });
 
-  registerCommand("follow", (ctx) => {
-    if (!hasPathfinder(ctx.bot)) {
-      ctx.bot.chat("Pathfinder not available.");
-      return;
-    }
+    registerCommand("stop", (ctx) => {
+      stopMovement(ctx.bot);
+      ctx.bot.chat("Stopped.");
+    });
 
-    const targetName = ctx.args[0];
-    if (!targetName) {
-      ctx.bot.chat("Usage: !follow <player>");
-      return;
-    }
-
-    const player = ctx.bot.players[targetName];
-    if (!player?.entity) {
-      ctx.bot.chat(`Can't see player: ${targetName}`);
-      return;
-    }
-
-    ctx.bot.pathfinder.setGoal(new goals.GoalFollow(player.entity, 3), true);
-    ctx.bot.chat(`Following ${targetName}.`);
-  });
-
-  registerCommand("stop", (ctx) => {
-    if (hasPathfinder(ctx.bot)) {
-      ctx.bot.pathfinder.setGoal(null);
-    }
-    ctx.bot.clearControlStates();
-    ctx.bot.chat("Stopped.");
-  });
-
-  console.log("[movement] Commands registered: !come, !follow, !stop");
+    commandsRegistered = true;
+    console.log("[movement] Commands registered: !come, !follow, !stop");
+  }
 }

@@ -1,5 +1,6 @@
 import mineflayer, { Bot } from "mineflayer";
 import { Config } from "./config";
+import { clearBot, setBot } from "./core/bot-registry";
 import { setupChat } from "./modules/chat";
 import { setupHealth } from "./modules/health";
 import { setupMovement } from "./modules/movement";
@@ -13,15 +14,16 @@ function log(msg: string): void {
  * 包含自动重连逻辑
  */
 export function createBot(config: Config): Promise<Bot> {
-  // 静态引入 — pathfinder is a required dependency in package.json
+  // 静态引入 — pathfinder 是 package.json 中的必需依赖
   const pathfinderPlugin = require("mineflayer-pathfinder").pathfinder;
 
   return new Promise((resolve) => {
     let attempt = 0;
     let intentionalDisconnect = false;
     let currentBot: Bot | null = null;
+    let resolved = false;
 
-    // Register process signal handlers once (outside connect to avoid duplicates)
+    // 只注册一次进程信号处理器（放在 connect 外，避免重复注册）
     const shutdown = () => {
       intentionalDisconnect = true;
       log("Shutting down...");
@@ -44,25 +46,29 @@ export function createBot(config: Config): Promise<Bot> {
       });
       currentBot = bot;
 
-      // Load pathfinder plugin
+      // 加载 pathfinder 插件
       bot.loadPlugin(pathfinderPlugin);
       log("Pathfinder plugin loaded.");
 
-      // --- Lifecycle logging ---
+      // --- 生命周期日志 ---
       bot.on("login", () => {
         log(`Logged in as ${bot.username}`);
       });
 
-      bot.once("spawn", () => {
-        attempt = 0; // reset on successful connection
+      bot.on("spawn", () => {
+        attempt = 0; // 连接成功后重置重试计数
+        setBot(bot);
         log("Spawned — bot is ready.");
 
-        // Set up modules after spawn so bot.entity etc. are available
+        // spawn 后再初始化模块，确保 bot.entity 等属性可用
         setupChat(bot, config.commandPrefix);
         setupHealth(bot);
         setupMovement(bot, true);
 
-        resolve(bot);
+        if (!resolved) {
+          resolved = true;
+          resolve(bot);
+        }
       });
 
       bot.on("kicked", (reason: string) => {
@@ -74,6 +80,7 @@ export function createBot(config: Config): Promise<Bot> {
       });
 
       bot.on("end", (reason: string) => {
+        clearBot();
         log(`Disconnected: ${reason}`);
 
         if (intentionalDisconnect) {

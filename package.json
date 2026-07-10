@@ -10,11 +10,14 @@
     "clean": "node -e \"require('fs').rmSync('dist', {recursive:true,force:true})\""
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "dotenv": "^16.4.7",
     "mineflayer": "^4.25.0",
-    "mineflayer-pathfinder": "^2.4.0"
+    "mineflayer-pathfinder": "^2.4.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@types/express": "^5.0.6",
     "@types/node": "^20.17.0",
     "tsx": "^4.19.0",
     "typescript": "^5.5.0"
