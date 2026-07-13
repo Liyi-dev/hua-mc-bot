@@ -22,12 +22,29 @@ import {
   sendChat,
   stopMovement,
 } from "../actions/bot-actions";
+import {
+  EQUIP_DESTINATIONS,
+  chestTransfer,
+  closeChest,
+  equipItem,
+  getChestContents,
+  getInventory,
+  getInventorySnapshot,
+  openChest,
+  setHeldItem,
+  tossItem,
+  unequipItem,
+} from "../actions/inventory-actions";
 import { isBotReady, requireBot } from "../core/bot-registry";
 import { errorResult, jsonResult, textResult } from "./result";
 
 const attackModeSchema = z
   .enum(["players", "mobs", "hostile", "friendly", "neutral", "named", "all"])
   .describe("攻击目标模式");
+
+const equipDestinationSchema = z
+  .enum(EQUIP_DESTINATIONS)
+  .describe("装备槽位");
 
 function handleToolError(err: unknown) {
   if (err instanceof BotActionError) {
@@ -435,6 +452,194 @@ export function registerBotTools(server: McpServer): void {
       }
     },
   );
+
+  server.registerTool(
+    "mc_list_inventory",
+    {
+      description:
+        "列出机器人自身背包（热键栏、主背包、盔甲、副手、当前手持）；与附近掉落物 mc_list_items 不同",
+      inputSchema: {},
+    },
+    async () => {
+      try {
+        const bot = requireBot();
+        return jsonResult(getInventory(bot));
+      } catch (err) {
+        return handleToolError(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "mc_set_held",
+    {
+      description: "切换手持物品：指定热键栏槽位 0-8，或按物品名（先热键栏，没有则从背包装备到手）",
+      inputSchema: {
+        slot: z.number().int().min(0).max(8).optional().describe("热键栏槽位 0-8"),
+        itemName: z.string().min(1).optional().describe("物品英文名或显示名"),
+      },
+    },
+    async ({ slot, itemName }) => {
+      try {
+        const bot = requireBot();
+        const result = await setHeldItem(bot, { slot, name: itemName });
+        return textResult(result);
+      } catch (err) {
+        return handleToolError(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "mc_equip",
+    {
+      description: "将背包中的物品装备到指定槽位（默认 hand）",
+      inputSchema: {
+        itemName: z.string().min(1).describe("物品英文名或显示名"),
+        destination: equipDestinationSchema.optional().describe("默认 hand"),
+      },
+    },
+    async ({ itemName, destination }) => {
+      try {
+        const bot = requireBot();
+        const result = await equipItem(bot, { name: itemName, destination });
+        return textResult(result);
+      } catch (err) {
+        return handleToolError(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "mc_unequip",
+    {
+      description: "卸下指定装备槽的物品到背包",
+      inputSchema: {
+        destination: equipDestinationSchema.describe("要卸下的槽位"),
+      },
+    },
+    async ({ destination }) => {
+      try {
+        const bot = requireBot();
+        const result = await unequipItem(bot, destination);
+        return textResult(result);
+      } catch (err) {
+        return handleToolError(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "mc_toss",
+    {
+      description: "丢弃背包中的物品（按物品名或绝对槽位）",
+      inputSchema: {
+        itemName: z.string().min(1).optional().describe("物品英文名或显示名"),
+        slot: z.number().int().optional().describe("背包绝对槽位号"),
+        count: z.number().int().positive().optional().describe("丢弃数量，默认整堆"),
+      },
+    },
+    async ({ itemName, slot, count }) => {
+      try {
+        const bot = requireBot();
+        const result = await tossItem(bot, { name: itemName, slot, count });
+        return textResult(result);
+      } catch (err) {
+        return handleToolError(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "mc_open_chest",
+    {
+      description:
+        "打开附近箱子/陷阱箱/木桶；不传坐标则开最近的；需在约 4.5 格内，不会自动寻路",
+      inputSchema: {
+        x: z.number().optional().describe("方块 X（与 y z 一起传）"),
+        y: z.number().optional().describe("方块 Y"),
+        z: z.number().optional().describe("方块 Z"),
+        maxDistance: z
+          .number()
+          .positive()
+          .optional()
+          .describe("搜索最近容器的最大距离，默认 6"),
+      },
+    },
+    async ({ x, y, z, maxDistance }) => {
+      try {
+        const bot = requireBot();
+        const result = await openChest(bot, { x, y, z, maxDistance });
+        return textResult(result);
+      } catch (err) {
+        return handleToolError(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "mc_list_chest",
+    {
+      description: "列出当前已打开箱子的内容；需先 mc_open_chest",
+      inputSchema: {},
+    },
+    async () => {
+      try {
+        const bot = requireBot();
+        return jsonResult(getChestContents(bot));
+      } catch (err) {
+        return handleToolError(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "mc_chest_transfer",
+    {
+      description: "在已打开的箱子与背包之间转移物品：take=取出，put=放入",
+      inputSchema: {
+        direction: z.enum(["take", "put"]).describe("take 从箱到背包；put 从背包到箱"),
+        itemName: z.string().min(1).optional().describe("物品英文名或显示名"),
+        slot: z
+          .number()
+          .int()
+          .optional()
+          .describe("take 时为容器槽位；put 时为背包绝对槽位"),
+        count: z.number().int().positive().optional().describe("数量，默认整堆"),
+      },
+    },
+    async ({ direction, itemName, slot, count }) => {
+      try {
+        const bot = requireBot();
+        const result = await chestTransfer(bot, {
+          direction,
+          name: itemName,
+          slot,
+          count,
+        });
+        return textResult(result);
+      } catch (err) {
+        return handleToolError(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "mc_close_chest",
+    {
+      description: "关闭当前打开的箱子",
+      inputSchema: {},
+    },
+    async () => {
+      try {
+        const bot = requireBot();
+        const result = await closeChest(bot);
+        return textResult(result);
+      } catch (err) {
+        return handleToolError(err);
+      }
+    },
+  );
 }
 
 /** 注册只读资源，供 AI 读取机器人上下文 */
@@ -537,6 +742,39 @@ export function registerBotResources(server: McpServer): void {
       };
     },
   );
+
+  server.registerResource(
+    "bot-inventory",
+    "mc://bot/inventory",
+    {
+      description: "机器人自身背包；若已打开箱子则附带 container 字段（JSON）",
+      mimeType: "application/json",
+    },
+    async () => {
+      if (!isBotReady()) {
+        return {
+          contents: [
+            {
+              uri: "mc://bot/inventory",
+              mimeType: "application/json",
+              text: JSON.stringify({ ready: false, message: "Bot 未就绪" }),
+            },
+          ],
+        };
+      }
+
+      const bot = requireBot();
+      return {
+        contents: [
+          {
+            uri: "mc://bot/inventory",
+            mimeType: "application/json",
+            text: JSON.stringify(getInventorySnapshot(bot), null, 2),
+          },
+        ],
+      };
+    },
+  );
 }
 
 /** 注册 Agent 提示词模板 */
@@ -566,6 +804,11 @@ export function registerBotPrompts(server: McpServer): void {
                 "- mc_list_players：查看附近玩家（可选 playerName）",
                 "- mc_list_mobs：查看附近生物及坐标（可选 mobName / maxDistance）",
                 "- mc_list_items：查看附近掉落物及坐标（可选 itemName / maxDistance）",
+                "- mc_list_inventory：查看自身背包/热键栏/手持/盔甲",
+                "- mc_set_held：切换手持（slot 0-8 或 itemName）",
+                "- mc_equip / mc_unequip：装备或卸下",
+                "- mc_toss：丢弃物品",
+                "- mc_open_chest / mc_list_chest / mc_chest_transfer / mc_close_chest：开箱与存取",
                 "- mc_send_chat：发送聊天",
                 "- mc_come_to_player：走到玩家身边",
                 "- mc_follow_player：跟随玩家",
@@ -580,8 +823,8 @@ export function registerBotPrompts(server: McpServer): void {
                 "- mc_get_attack_status：查看攻击状态",
                 "- mc_attack_exclude：管理攻击排除名单",
                 "",
-                "操作前先调用 mc_get_status / mc_list_mobs / mc_list_items 确认环境，再执行动作。",
-              ].join("\n"),
+                "操作前先调用 mc_get_status / mc_list_mobs / mc_list_items / mc_list_inventory 确认环境，再执行动作。",
+                "开箱需在约 4.5 格内；mc_list_items 是世界掉落物，mc_list_inventory 是自身背包。",              ].join("\n"),
             },
           },
         ],

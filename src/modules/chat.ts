@@ -58,7 +58,11 @@ export function setupChat(bot: Bot, prefix: string): void {
     };
 
     try {
-      handler(ctx);
+      Promise.resolve(handler(ctx)).catch((err) => {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        bot.chat(`Command error: ${errMsg}`);
+        console.error(`[chat] 错误处理 "${clean}" from ${username}:`, err);
+      });
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
       bot.chat(`Command error: ${errMsg}`);

@@ -7,4 +7,4 @@ export interface CommandContext {
   message: string;
 }
 
-export type CommandHandler = (ctx: CommandContext) => void;
+export type CommandHandler = (ctx: CommandContext) => void | Promise<void>;

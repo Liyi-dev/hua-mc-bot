@@ -1,6 +1,6 @@
 # Hua MC Bot
 
-基于 [Mineflayer](https://github.com/PrismarineJS/mineflayer) 的 Minecraft Bot MVP 项目，使用 TypeScript 构建。
+基于 [Mineflayer](https://github.com/PrismarineJS/mineflayer) 的 Minecraft Bot 项目，使用 TypeScript 构建。
 
 ## 功能
 
@@ -9,6 +9,7 @@
 - 聊天指令响应
 - 自身状态查询（血量、饥饿度、坐标、延迟、附近生物）
 - 附近掉落物查询与拾取寻路
+- 物品管理（背包/热键栏/手持、装备卸下、丢弃、开箱存取）
 - 寻路移动（来找我、跟随玩家、走向生物/掉落物、停止）
 - 攻击（单次/持续；玩家/敌对/友好/中立/指定；排除名单、范围、低血优先）
 - 模块化结构，方便扩展
@@ -80,9 +81,23 @@ npm start
 | `!attackstop` | 停止持续攻击 | `已停止攻击` |
 | `!attackstatus` | 查看攻击状态 | `攻击中 mode=hostile ...` |
 | `!attackexclude list\|add\|remove\|set\|clear` | 管理攻击排除名单 | `!attackexclude add iron_golem` |
+| `!inv` | 查看背包、热键栏、手持、盔甲 | — |
+| `!hold <0-8\|物品名>` | 切换手持 | `!hold 2` / `!hold diamond_sword` |
+| `!equip <物品名> [槽]` | 装备物品（槽默认 hand） | `!equip iron_helmet head` |
+| `!unequip <槽>` | 卸下装备 | `!unequip head` |
+| `!toss <物品名\|槽位> [数量]` | 丢弃物品 | `!toss dirt 16` |
+| `!openchest [x y z]` | 打开附近/指定箱子或木桶 | `!openchest` / `!openchest 10 64 -20` |
+| `!chest` | 查看当前打开箱子的内容 | — |
+| `!take <物品名\|槽位> [数量]` | 从箱子取到背包 | `!take diamond 5` |
+| `!put <物品名\|槽位> [数量]` | 从背包放入箱子 | `!put cobblestone` |
+| `!closechest` | 关闭当前箱子 | — |
 | `!stop` | Bot 停止所有移动（不停攻击） | `Stopped.` |
 
 攻击 `mode`：`players` / `mobs` / `hostile` / `friendly` / `neutral` / `named` / `all`。也可直接 `!attack cow`（视为 named）。默认排除 `villager`、`wandering_trader`、`cat`；默认范围 48 格。
+
+装备槽：`hand` / `head` / `torso` / `legs` / `feet` / `off-hand`。开箱需在约 4.5 格内（不会自动寻路）；支持 `chest` / `trapped_chest` / `barrel`。`!items` 是附近掉落物，`!inv` 是自身背包。
+
+对应 MCP 工具（与聊天指令共用 actions）：`mc_list_inventory`、`mc_set_held`、`mc_equip`、`mc_unequip`、`mc_toss`、`mc_open_chest`、`mc_list_chest`、`mc_chest_transfer`、`mc_close_chest`；资源 `mc://bot/inventory`。注意 `mc_list_items` 仍是附近掉落物。
 
 ## 项目结构
 
@@ -92,10 +107,16 @@ src/
 ├── bot.ts                # Bot 工厂：创建实例、插件加载、断线重连
 ├── config.ts             # 配置加载：读取 .env，校验并导出类型化配置
 ├── types.ts              # 共享类型：CommandContext、CommandHandler
+├── actions/
+│   ├── bot-actions.ts    # 状态/附近实体/移动/掉落物
+│   ├── attack-actions.ts # 攻击逻辑
+│   └── inventory-actions.ts # 背包与箱子
 └── modules/
     ├── chat.ts           # 指令系统：注册表 + 聊天监听 + 指令分发
-    ├── health.ts         # 状态指令：!ping、!pos、!status
-    └── movement.ts       # 移动指令：!come、!follow、!stop（依赖 pathfinder）
+    ├── health.ts         # 状态指令：!ping、!pos、!status、!mobs
+    ├── movement.ts       # 移动指令：!come、!follow、!stop 等
+    ├── attack.ts         # 攻击指令
+    └── inventory.ts      # 物品管理：!inv、!hold、!openchest 等
 ```
 
 ## NPM Scripts
