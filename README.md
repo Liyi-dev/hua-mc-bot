@@ -7,8 +7,9 @@
 - 登录 Minecraft 服务器（支持 offline / mojang / microsoft 认证）
 - 断线自动重连（指数退避）
 - 聊天指令响应
-- 自身状态查询（血量、饥饿度、坐标、延迟）
-- 寻路移动（来找我、跟随玩家、停止）
+- 自身状态查询（血量、饥饿度、坐标、延迟、附近生物）
+- 附近掉落物查询与拾取寻路
+- 寻路移动（来找我、跟随玩家、走向掉落物、停止）
 - 模块化结构，方便扩展
 
 ## 快速开始
@@ -64,9 +65,15 @@ npm start
 |---|---|---|
 | `!ping` | 返回 Bot 网络延迟 | `Pong! 42ms` |
 | `!pos` | 返回 Bot 当前坐标和维度 | `X: 123.5 Y: 64.0 Z: -456.2 (overworld)` |
-| `!status` | 返回完整状态摘要 | `HP 20/20 \| Food 18/20 \| Ping 42ms \| overworld` |
+| `!status` | 返回完整状态摘要（含附近生物数量） | `HP 20/20 \| Food 18/20 \| ... \| Mobs 3` |
+| `!mobs [距离]` | 列出附近生物名称、坐标与距离 | `!mobs 32` |
+| `!items [距离]` | 列出附近掉落物名称、坐标与距离 | `!items 16` |
 | `!come` | Bot 寻路走到你身边 | `Coming to you, Steve!` |
 | `!follow <玩家>` | Bot 跟随指定玩家 | `!follow Steve` |
+| `!gotomob [生物名]` | 走到指定/最近生物身边 | `!gotomob cow` |
+| `!followmob [生物名]` | 跟随指定/最近生物 | `!followmob cow` |
+| `!getitem [物品名]` | 走到指定/最近掉落物身边 | `!getitem diamond` |
+| `!getitems` | 依次走到附近所有掉落物身边 | `开始依次前往附近 3 个掉落物` |
 | `!stop` | Bot 停止所有移动 | `Stopped.` |
 
 ## 项目结构

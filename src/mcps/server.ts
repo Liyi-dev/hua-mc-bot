@@ -2,9 +2,15 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import * as z from "zod";
 import {
   BotActionError,
+  comeToAllItems,
+  comeToItem,
+  comeToMob,
   comeToPlayer,
+  followMob,
   followPlayer,
   getBotStatus,
+  getNearbyItems,
+  getNearbyMobs,
   getNearbyPlayers,
   sendChat,
   stopMovement,
@@ -75,6 +81,50 @@ export function registerBotTools(server: McpServer): void {
   );
 
   server.registerTool(
+    "mc_list_mobs",
+    {
+      description: "列出机器人视野内附近生物（含牛/猪等动物与敌对生物）的名称、类型、距离与坐标",
+      inputSchema: {
+        maxDistance: z
+          .number()
+          .positive()
+          .optional()
+          .describe("可选，只返回该距离（格）内的生物"),
+      },
+    },
+    async ({ maxDistance }) => {
+      try {
+        const bot = requireBot();
+        return jsonResult(getNearbyMobs(bot, maxDistance));
+      } catch (err) {
+        return handleToolError(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "mc_list_items",
+    {
+      description: "列出机器人视野内附近掉落物的名称、数量、距离与坐标",
+      inputSchema: {
+        maxDistance: z
+          .number()
+          .positive()
+          .optional()
+          .describe("可选，只返回该距离（格）内的掉落物"),
+      },
+    },
+    async ({ maxDistance }) => {
+      try {
+        const bot = requireBot();
+        return jsonResult(getNearbyItems(bot, maxDistance));
+      } catch (err) {
+        return handleToolError(err);
+      }
+    },
+  );
+
+  server.registerTool(
     "mc_send_chat",
     {
       description: "在游戏内聊天栏发送消息（所有在线玩家可见）",
@@ -126,6 +176,108 @@ export function registerBotTools(server: McpServer): void {
         const bot = requireBot();
         const result = followPlayer(bot, player);
         bot.chat(`Following ${player}.`);
+        return textResult(result);
+      } catch (err) {
+        return handleToolError(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "mc_come_to_mob",
+    {
+      description:
+        "寻路走到附近生物身边；可按名称（如 cow）或实体 ID 指定，都不传则前往最近生物",
+      inputSchema: {
+        mobName: z
+          .string()
+          .min(1)
+          .optional()
+          .describe("生物英文名或显示名，如 cow；可模糊匹配"),
+        entityId: z
+          .number()
+          .int()
+          .optional()
+          .describe("可选，mc_list_mobs 返回的实体 ID，优先于 mobName"),
+      },
+    },
+    async ({ mobName, entityId }) => {
+      try {
+        const bot = requireBot();
+        const result = comeToMob(bot, mobName, entityId);
+        bot.chat(result);
+        return textResult(result);
+      } catch (err) {
+        return handleToolError(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "mc_follow_mob",
+    {
+      description:
+        "持续跟随附近生物；可按名称（如 cow）或实体 ID 指定，都不传则跟随最近生物",
+      inputSchema: {
+        mobName: z
+          .string()
+          .min(1)
+          .optional()
+          .describe("生物英文名或显示名，如 cow；可模糊匹配"),
+        entityId: z
+          .number()
+          .int()
+          .optional()
+          .describe("可选，mc_list_mobs 返回的实体 ID，优先于 mobName"),
+      },
+    },
+    async ({ mobName, entityId }) => {
+      try {
+        const bot = requireBot();
+        const result = followMob(bot, mobName, entityId);
+        bot.chat(result);
+        return textResult(result);
+      } catch (err) {
+        return handleToolError(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "mc_come_to_item",
+    {
+      description: "寻路走到附近指定掉落物身边；不传 itemName 则前往最近的掉落物",
+      inputSchema: {
+        itemName: z
+          .string()
+          .min(1)
+          .optional()
+          .describe("物品英文名或显示名，如 diamond；可模糊匹配"),
+      },
+    },
+    async ({ itemName }) => {
+      try {
+        const bot = requireBot();
+        const result = comeToItem(bot, itemName);
+        bot.chat(result);
+        return textResult(result);
+      } catch (err) {
+        return handleToolError(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "mc_come_to_all_items",
+    {
+      description: "依次寻路前往附近所有掉落物身边（按距离从近到远）",
+      inputSchema: {},
+    },
+    async () => {
+      try {
+        const bot = requireBot();
+        const result = comeToAllItems(bot);
+        bot.chat(result);
         return textResult(result);
       } catch (err) {
         return handleToolError(err);
@@ -186,6 +338,72 @@ export function registerBotResources(server: McpServer): void {
       };
     },
   );
+
+  server.registerResource(
+    "bot-nearby-mobs",
+    "mc://bot/nearby-mobs",
+    {
+      description: "机器人附近生物列表（JSON）",
+      mimeType: "application/json",
+    },
+    async () => {
+      if (!isBotReady()) {
+        return {
+          contents: [
+            {
+              uri: "mc://bot/nearby-mobs",
+              mimeType: "application/json",
+              text: JSON.stringify({ ready: false, message: "Bot 未就绪" }),
+            },
+          ],
+        };
+      }
+
+      const bot = requireBot();
+      return {
+        contents: [
+          {
+            uri: "mc://bot/nearby-mobs",
+            mimeType: "application/json",
+            text: JSON.stringify(getNearbyMobs(bot), null, 2),
+          },
+        ],
+      };
+    },
+  );
+
+  server.registerResource(
+    "bot-nearby-items",
+    "mc://bot/nearby-items",
+    {
+      description: "机器人附近掉落物列表（JSON）",
+      mimeType: "application/json",
+    },
+    async () => {
+      if (!isBotReady()) {
+        return {
+          contents: [
+            {
+              uri: "mc://bot/nearby-items",
+              mimeType: "application/json",
+              text: JSON.stringify({ ready: false, message: "Bot 未就绪" }),
+            },
+          ],
+        };
+      }
+
+      const bot = requireBot();
+      return {
+        contents: [
+          {
+            uri: "mc://bot/nearby-items",
+            mimeType: "application/json",
+            text: JSON.stringify(getNearbyItems(bot), null, 2),
+          },
+        ],
+      };
+    },
+  );
 }
 
 /** 注册 Agent 提示词模板 */
@@ -213,12 +431,18 @@ export function registerBotPrompts(server: McpServer): void {
                 "可用工具：",
                 "- mc_get_status：查看状态",
                 "- mc_list_players：查看附近玩家",
+                "- mc_list_mobs：查看附近生物及坐标",
+                "- mc_list_items：查看附近掉落物及坐标",
                 "- mc_send_chat：发送聊天",
                 "- mc_come_to_player：走到玩家身边",
                 "- mc_follow_player：跟随玩家",
+                "- mc_come_to_mob：走到指定/最近生物身边",
+                "- mc_follow_mob：跟随指定/最近生物",
+                "- mc_come_to_item：走到指定/最近掉落物身边",
+                "- mc_come_to_all_items：依次走到附近所有掉落物身边",
                 "- mc_stop_movement：停止移动",
                 "",
-                "操作前先调用 mc_get_status 或 mc_list_players 确认环境，再执行动作。",
+                "操作前先调用 mc_get_status / mc_list_mobs / mc_list_items 确认环境，再执行动作。",
               ].join("\n"),
             },
           },

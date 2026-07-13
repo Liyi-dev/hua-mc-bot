@@ -46,7 +46,7 @@ export function setupChat(bot: Bot, prefix: string): void {
 
     const handler = registry.get(cmdName);
     if (!handler) {
-      bot.chat(`Unknown command: ${prefix}${cmdName}`);
+      bot.chat(`未知指令: ${prefix}${cmdName}`);
       return;
     }
 
@@ -62,9 +62,9 @@ export function setupChat(bot: Bot, prefix: string): void {
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
       bot.chat(`Command error: ${errMsg}`);
-      console.error(`[chat] Error handling "${clean}" from ${username}:`, err);
+      console.error(`[chat] 错误处理 "${clean}" from ${username}:`, err);
     }
   });
 
-  console.log(`[chat] Listening for commands with prefix "${prefix}"`);
+  console.log(`[chat] 正在监听命令前缀："${prefix}"`);
 }
