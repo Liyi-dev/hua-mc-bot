@@ -6,6 +6,7 @@ import { setupHealth } from "./modules/health";
 import { setupMovement } from "./modules/movement";
 import { setupAttack } from "./modules/attack";
 import { setupInventory } from "./modules/inventory";
+import { setupBuilding } from "./modules/building";
 
 function log(msg: string): void {
   console.log(`[${new Date().toISOString()}] ${msg}`);
@@ -68,6 +69,7 @@ export function createBot(config: Config): Promise<Bot> {
         setupMovement(bot, true);
         setupAttack(bot);
         setupInventory(bot);
+        setupBuilding(bot);
 
         if (!resolved) {
           resolved = true;

@@ -35,6 +35,14 @@ import {
   tossItem,
   unequipItem,
 } from "../actions/inventory-actions";
+import {
+  BLOCK_FACES,
+  digOne,
+  placeOne,
+  raycastBlock,
+  scanNearbyBlocks,
+  selectBestTool,
+} from "../actions/building-actions";
 import { isBotReady, requireBot } from "../core/bot-registry";
 import { errorResult, jsonResult, textResult } from "./result";
 
@@ -45,6 +53,8 @@ const attackModeSchema = z
 const equipDestinationSchema = z
   .enum(EQUIP_DESTINATIONS)
   .describe("装备槽位");
+
+const blockFaceSchema = z.enum(BLOCK_FACES).describe("方块放置朝向面");
 
 function handleToolError(err: unknown) {
   if (err instanceof BotActionError) {
@@ -640,6 +650,177 @@ export function registerBotTools(server: McpServer): void {
       }
     },
   );
+
+  server.registerTool(
+    "mc_scan_blocks",
+    {
+      description:
+        "扫描附近方块分布，返回总数、按名称计数、以及最近若干方块详情（默认距离 8、最多 64 条）",
+      inputSchema: {
+        maxDistance: z.number().positive().optional().describe("扫描半径，默认 8"),
+        names: z
+          .array(z.string().min(1))
+          .optional()
+          .describe("可选方块名过滤（英文名/显示名，模糊匹配）"),
+        maxResults: z
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .describe("返回的方块详情条数上限，默认 64"),
+      },
+    },
+    async ({ maxDistance, names, maxResults }) => {
+      try {
+        const bot = requireBot();
+        return jsonResult(scanNearbyBlocks(bot, { maxDistance, names, maxResults }));
+      } catch (err) {
+        return handleToolError(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "mc_raycast_block",
+    {
+      description: "读取准星前方方块信息",
+      inputSchema: {
+        maxDistance: z.number().positive().optional().describe("射线最大距离，默认 5"),
+      },
+    },
+    async ({ maxDistance }) => {
+      try {
+        const bot = requireBot();
+        return jsonResult(raycastBlock(bot, maxDistance));
+      } catch (err) {
+        return handleToolError(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "mc_best_tool",
+    {
+      description: "根据背包推荐挖掘指定方块的最佳工具（只读，不切换手持）",
+      inputSchema: {
+        blockName: z.string().min(1).describe("方块英文名或显示名"),
+      },
+    },
+    async ({ blockName }) => {
+      try {
+        const bot = requireBot();
+        const choice = selectBestTool(bot, blockName);
+        if (!choice) {
+          return textResult(`背包中没有适合挖掘 ${blockName} 的工具`);
+        }
+        return jsonResult(choice);
+      } catch (err) {
+        return handleToolError(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "mc_dig_block",
+    {
+      description:
+        "挖掘一块方块：可指定坐标或按名称找最近的；都不传则挖准星方块。过远会自动寻路，默认自动换最佳工具",
+      inputSchema: {
+        x: z.number().optional().describe("方块 X（与 y z 一起传）"),
+        y: z.number().optional().describe("方块 Y"),
+        z: z.number().optional().describe("方块 Z"),
+        blockName: z.string().min(1).optional().describe("按名称挖掘附近最近的该方块"),
+        maxDistance: z
+          .number()
+          .positive()
+          .optional()
+          .describe("按名称搜索时的最大距离，默认 8"),
+        autoTool: z.boolean().optional().describe("是否自动换工具，默认 true"),
+        force: z.boolean().optional().describe("无合适工具也强制挖，默认 false"),
+      },
+    },
+    async ({ x, y, z, blockName, maxDistance, autoTool, force }) => {
+      try {
+        const bot = requireBot();
+        const hasPos = x !== undefined || y !== undefined || z !== undefined;
+        if (hasPos && (x === undefined || y === undefined || z === undefined)) {
+          throw new BotActionError("坐标需同时提供 x y z");
+        }
+        if (hasPos && blockName) {
+          throw new BotActionError("不能同时指定坐标与 blockName");
+        }
+        const result = await digOne(bot, {
+          position: hasPos ? { x: x!, y: y!, z: z! } : undefined,
+          name: blockName,
+          maxDistance,
+          autoTool,
+          force,
+        });
+        return textResult(result);
+      } catch (err) {
+        return handleToolError(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "mc_place_block",
+    {
+      description:
+        "放置一块方块。优先用 x/y/z 作为要填的空气格（自动选邻接固体面）；或用 againstX/Y/Z + face。过远会自动寻路",
+      inputSchema: {
+        x: z.number().optional().describe("目标空气格 X（与 y z 一起）"),
+        y: z.number().optional().describe("目标空气格 Y"),
+        z: z.number().optional().describe("目标空气格 Z"),
+        againstX: z.number().optional().describe("参照固体方块 X（与 againstY/Z + face）"),
+        againstY: z.number().optional().describe("参照固体方块 Y"),
+        againstZ: z.number().optional().describe("参照固体方块 Z"),
+        face: blockFaceSchema.optional().describe("相对参照方块的放置面"),
+        itemName: z.string().min(1).optional().describe("要放置的物品名；默认用手持/背包可放置物"),
+      },
+    },
+    async ({ x, y, z, againstX, againstY, againstZ, face, itemName }) => {
+      try {
+        const bot = requireBot();
+        const hasTarget = x !== undefined || y !== undefined || z !== undefined;
+        const hasAgainst =
+          againstX !== undefined || againstY !== undefined || againstZ !== undefined;
+
+        if (hasTarget && hasAgainst) {
+          throw new BotActionError("请使用 target(x y z) 或 against+face，不要混用");
+        }
+
+        if (hasAgainst) {
+          if (
+            againstX === undefined ||
+            againstY === undefined ||
+            againstZ === undefined ||
+            !face
+          ) {
+            throw new BotActionError("against 模式需同时提供 againstX/Y/Z 与 face");
+          }
+          const result = await placeOne(bot, {
+            against: { x: againstX, y: againstY, z: againstZ },
+            face,
+            itemName,
+          });
+          return textResult(result);
+        }
+
+        if (!hasTarget || x === undefined || y === undefined || z === undefined) {
+          throw new BotActionError("需要提供目标空气格 x y z，或 againstX/Y/Z + face");
+        }
+
+        const result = await placeOne(bot, {
+          target: { x, y, z },
+          itemName,
+        });
+        return textResult(result);
+      } catch (err) {
+        return handleToolError(err);
+      }
+    },
+  );
 }
 
 /** 注册只读资源，供 AI 读取机器人上下文 */
@@ -822,9 +1003,15 @@ export function registerBotPrompts(server: McpServer): void {
                 "- mc_stop_attack：停止攻击",
                 "- mc_get_attack_status：查看攻击状态",
                 "- mc_attack_exclude：管理攻击排除名单",
+                "- mc_scan_blocks：扫描附近方块分布（可按名称过滤）",
+                "- mc_raycast_block：准星前方方块",
+                "- mc_best_tool：推荐挖掘某方块的最佳工具（只读）",
+                "- mc_dig_block：挖掘一块方块（可自动走近并换工具）",
+                "- mc_place_block：放置一块方块（target 空气格或 against+face）",
                 "",
-                "操作前先调用 mc_get_status / mc_list_mobs / mc_list_items / mc_list_inventory 确认环境，再执行动作。",
-                "开箱需在约 4.5 格内；mc_list_items 是世界掉落物，mc_list_inventory 是自身背包。",              ].join("\n"),
+                "操作前先调用 mc_get_status / mc_list_mobs / mc_list_items / mc_list_inventory / mc_scan_blocks 确认环境，再执行动作。",
+                "开箱需在约 4.5 格内；mc_list_items 是世界掉落物，mc_list_inventory 是自身背包。",
+                "挖放前可先 mc_scan_blocks / mc_raycast_block；挖放会自动走近并换工具。",              ].join("\n"),
             },
           },
         ],

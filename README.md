@@ -10,6 +10,7 @@
 - 自身状态查询（血量、饥饿度、坐标、延迟、附近生物）
 - 附近掉落物查询与拾取寻路
 - 物品管理（背包/热键栏/手持、装备卸下、丢弃、开箱存取）
+- 建筑（附近方块扫描、准星方块、挖矿选工具、单格挖掘/放置）
 - 寻路移动（来找我、跟随玩家、走向生物/掉落物、停止）
 - 攻击（单次/持续；玩家/敌对/友好/中立/指定；排除名单、范围、低血优先）
 - 模块化结构，方便扩展
@@ -91,6 +92,11 @@ npm start
 | `!take <物品名\|槽位> [数量]` | 从箱子取到背包 | `!take diamond 5` |
 | `!put <物品名\|槽位> [数量]` | 从背包放入箱子 | `!put cobblestone` |
 | `!closechest` | 关闭当前箱子 | — |
+| `!blocks [距离] [名称]` | 扫描附近方块分布摘要 | `!blocks 8 stone` |
+| `!lookblock [距离]` | 查看准星前方方块 | `!lookblock` |
+| `!toolfor <方块名>` | 推荐背包中挖掘该方块的最佳工具 | `!toolfor diamond_ore` |
+| `!dig [名称\|x y z]` | 挖掘一块（默认准星；过远自动走近并换工具） | `!dig oak_log` / `!dig 10 64 -20` |
+| `!place <物品> <x y z> [face]` | 放置一块（三坐标为空气目标格；带 face 则坐标为参照块） | `!place dirt 10 64 -20` / `!place cobblestone 10 63 -20 up` |
 | `!stop` | Bot 停止所有移动（不停攻击） | `Stopped.` |
 
 攻击 `mode`：`players` / `mobs` / `hostile` / `friendly` / `neutral` / `named` / `all`。也可直接 `!attack cow`（视为 named）。默认排除 `villager`、`wandering_trader`、`cat`；默认范围 48 格。
@@ -98,6 +104,8 @@ npm start
 装备槽：`hand` / `head` / `torso` / `legs` / `feet` / `off-hand`。开箱需在约 4.5 格内（不会自动寻路）；支持 `chest` / `trapped_chest` / `barrel`。`!items` 是附近掉落物，`!inv` 是自身背包。
 
 对应 MCP 工具（与聊天指令共用 actions）：`mc_list_inventory`、`mc_set_held`、`mc_equip`、`mc_unequip`、`mc_toss`、`mc_open_chest`、`mc_list_chest`、`mc_chest_transfer`、`mc_close_chest`；资源 `mc://bot/inventory`。注意 `mc_list_items` 仍是附近掉落物。
+
+建筑 MCP：`mc_scan_blocks`、`mc_raycast_block`、`mc_best_tool`、`mc_dig_block`、`mc_place_block`。挖放会在约 4.5 格触及外自动寻路；`mc_dig_block` 默认自动换最佳工具。
 
 ## 项目结构
 
@@ -110,13 +118,15 @@ src/
 ├── actions/
 │   ├── bot-actions.ts    # 状态/附近实体/移动/掉落物
 │   ├── attack-actions.ts # 攻击逻辑
-│   └── inventory-actions.ts # 背包与箱子
+│   ├── inventory-actions.ts # 背包与箱子
+│   └── building-actions.ts  # 方块观察/选工具/挖掘/放置
 └── modules/
     ├── chat.ts           # 指令系统：注册表 + 聊天监听 + 指令分发
     ├── health.ts         # 状态指令：!ping、!pos、!status、!mobs
     ├── movement.ts       # 移动指令：!come、!follow、!stop 等
     ├── attack.ts         # 攻击指令
-    └── inventory.ts      # 物品管理：!inv、!hold、!openchest 等
+    ├── inventory.ts      # 物品管理：!inv、!hold、!openchest 等
+    └── building.ts       # 建筑：!blocks、!dig、!place 等
 ```
 
 ## NPM Scripts
