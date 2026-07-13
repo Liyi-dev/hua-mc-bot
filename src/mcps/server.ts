@@ -78,13 +78,19 @@ export function registerBotTools(server: McpServer): void {
   server.registerTool(
     "mc_list_players",
     {
-      description: "列出机器人视野内可见的在线玩家及其距离",
-      inputSchema: {},
+      description: "列出机器人视野内可见的在线玩家及其距离；可按玩家名过滤",
+      inputSchema: {
+        playerName: z
+          .string()
+          .min(1)
+          .optional()
+          .describe("可选，玩家名；支持模糊匹配，如 Ste"),
+      },
     },
-    async () => {
+    async ({ playerName }) => {
       try {
         const bot = requireBot();
-        return jsonResult(getNearbyPlayers(bot));
+        return jsonResult(getNearbyPlayers(bot, playerName));
       } catch (err) {
         return handleToolError(err);
       }
@@ -94,19 +100,25 @@ export function registerBotTools(server: McpServer): void {
   server.registerTool(
     "mc_list_mobs",
     {
-      description: "列出机器人视野内附近生物（含牛/猪等动物与敌对生物）的名称、类型、距离与坐标",
+      description:
+        "列出机器人视野内附近生物（含牛/猪等动物与敌对生物）的名称、类型、距离与坐标；可按名称过滤",
       inputSchema: {
         maxDistance: z
           .number()
           .positive()
           .optional()
           .describe("可选，只返回该距离（格）内的生物"),
+        mobName: z
+          .string()
+          .min(1)
+          .optional()
+          .describe("可选，生物英文名或显示名，如 cow；支持模糊匹配"),
       },
     },
-    async ({ maxDistance }) => {
+    async ({ maxDistance, mobName }) => {
       try {
         const bot = requireBot();
-        return jsonResult(getNearbyMobs(bot, maxDistance));
+        return jsonResult(getNearbyMobs(bot, maxDistance, mobName));
       } catch (err) {
         return handleToolError(err);
       }
@@ -116,19 +128,24 @@ export function registerBotTools(server: McpServer): void {
   server.registerTool(
     "mc_list_items",
     {
-      description: "列出机器人视野内附近掉落物的名称、数量、距离与坐标",
+      description: "列出机器人视野内附近掉落物的名称、数量、距离与坐标；可按物品名过滤",
       inputSchema: {
         maxDistance: z
           .number()
           .positive()
           .optional()
           .describe("可选，只返回该距离（格）内的掉落物"),
+        itemName: z
+          .string()
+          .min(1)
+          .optional()
+          .describe("可选，物品英文名或显示名，如 diamond；支持模糊匹配"),
       },
     },
-    async ({ maxDistance }) => {
+    async ({ maxDistance, itemName }) => {
       try {
         const bot = requireBot();
-        return jsonResult(getNearbyItems(bot, maxDistance));
+        return jsonResult(getNearbyItems(bot, maxDistance, itemName));
       } catch (err) {
         return handleToolError(err);
       }
@@ -546,9 +563,9 @@ export function registerBotPrompts(server: McpServer): void {
                 "",
                 "可用工具：",
                 "- mc_get_status：查看状态",
-                "- mc_list_players：查看附近玩家",
-                "- mc_list_mobs：查看附近生物及坐标",
-                "- mc_list_items：查看附近掉落物及坐标",
+                "- mc_list_players：查看附近玩家（可选 playerName）",
+                "- mc_list_mobs：查看附近生物及坐标（可选 mobName / maxDistance）",
+                "- mc_list_items：查看附近掉落物及坐标（可选 itemName / maxDistance）",
                 "- mc_send_chat：发送聊天",
                 "- mc_come_to_player：走到玩家身边",
                 "- mc_follow_player：跟随玩家",
