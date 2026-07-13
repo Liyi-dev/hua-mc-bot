@@ -9,7 +9,8 @@
 - 聊天指令响应
 - 自身状态查询（血量、饥饿度、坐标、延迟、附近生物）
 - 附近掉落物查询与拾取寻路
-- 寻路移动（来找我、跟随玩家、走向掉落物、停止）
+- 寻路移动（来找我、跟随玩家、走向生物/掉落物、停止）
+- 攻击（单次/持续；玩家/敌对/友好/中立/指定；排除名单、范围、低血优先）
 - 模块化结构，方便扩展
 
 ## 快速开始
@@ -74,7 +75,14 @@ npm start
 | `!followmob [生物名]` | 跟随指定/最近生物 | `!followmob cow` |
 | `!getitem [物品名]` | 走到指定/最近掉落物身边 | `!getitem diamond` |
 | `!getitems` | 依次走到附近所有掉落物身边 | `开始依次前往附近 3 个掉落物` |
-| `!stop` | Bot 停止所有移动 | `Stopped.` |
+| `!hit <mode> [name] [范围]` | 单次挥砍（低血优先） | `!hit hostile` / `!hit named cow` |
+| `!attack <mode> [name] [范围]` | 持续攻击（自动寻路贴近） | `!attack hostile 24` / `!attack cow` |
+| `!attackstop` | 停止持续攻击 | `已停止攻击` |
+| `!attackstatus` | 查看攻击状态 | `攻击中 mode=hostile ...` |
+| `!attackexclude list\|add\|remove\|set\|clear` | 管理攻击排除名单 | `!attackexclude add iron_golem` |
+| `!stop` | Bot 停止所有移动（不停攻击） | `Stopped.` |
+
+攻击 `mode`：`players` / `mobs` / `hostile` / `friendly` / `neutral` / `named` / `all`。也可直接 `!attack cow`（视为 named）。默认排除 `villager`、`wandering_trader`、`cat`；默认范围 48 格。
 
 ## 项目结构
 

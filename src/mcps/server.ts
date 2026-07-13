@@ -1,6 +1,13 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import * as z from "zod";
 import {
+  attackTargets,
+  getAttackStatus,
+  hitTargets,
+  setAttackExclude,
+  stopAttack,
+} from "../actions/attack-actions";
+import {
   BotActionError,
   comeToAllItems,
   comeToItem,
@@ -17,6 +24,10 @@ import {
 } from "../actions/bot-actions";
 import { isBotReady, requireBot } from "../core/bot-registry";
 import { errorResult, jsonResult, textResult } from "./result";
+
+const attackModeSchema = z
+  .enum(["players", "mobs", "hostile", "friendly", "neutral", "named", "all"])
+  .describe("攻击目标模式");
 
 function handleToolError(err: unknown) {
   if (err instanceof BotActionError) {
@@ -288,7 +299,7 @@ export function registerBotTools(server: McpServer): void {
   server.registerTool(
     "mc_stop_movement",
     {
-      description: "停止所有寻路与移动操作",
+      description: "停止所有寻路与移动操作（不影响持续攻击）",
       inputSchema: {},
     },
     async () => {
@@ -297,6 +308,111 @@ export function registerBotTools(server: McpServer): void {
         const result = stopMovement(bot);
         bot.chat("Stopped.");
         return textResult(result);
+      } catch (err) {
+        return handleToolError(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "mc_hit",
+    {
+      description:
+        "对附近符合条件的目标单次挥砍（低血优先）。mode=named 时需提供 targetName 或 entityId",
+      inputSchema: {
+        mode: attackModeSchema,
+        targetName: z.string().min(1).optional().describe("目标名称，可模糊匹配"),
+        entityId: z.number().int().optional().describe("精确实体 ID"),
+        maxDistance: z.number().positive().optional().describe("攻击范围（格），默认 48"),
+      },
+    },
+    async ({ mode, targetName, entityId, maxDistance }) => {
+      try {
+        const bot = requireBot();
+        const result = hitTargets(bot, { mode, targetName, entityId, maxDistance });
+        bot.chat(result);
+        return textResult(result);
+      } catch (err) {
+        return handleToolError(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "mc_attack",
+    {
+      description:
+        "持续攻击附近符合条件的目标（自动寻路贴近，低血优先）。用 mc_stop_attack 停止",
+      inputSchema: {
+        mode: attackModeSchema,
+        targetName: z.string().min(1).optional().describe("目标名称，可模糊匹配"),
+        entityId: z.number().int().optional().describe("精确实体 ID"),
+        maxDistance: z.number().positive().optional().describe("攻击范围（格），默认 48"),
+      },
+    },
+    async ({ mode, targetName, entityId, maxDistance }) => {
+      try {
+        const bot = requireBot();
+        const result = attackTargets(bot, { mode, targetName, entityId, maxDistance });
+        bot.chat(result);
+        return textResult(result);
+      } catch (err) {
+        return handleToolError(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "mc_stop_attack",
+    {
+      description: "停止持续攻击",
+      inputSchema: {},
+    },
+    async () => {
+      try {
+        const bot = requireBot();
+        const result = stopAttack(bot);
+        bot.chat(result);
+        return textResult(result);
+      } catch (err) {
+        return handleToolError(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "mc_get_attack_status",
+    {
+      description: "查看当前攻击状态（是否运行、模式、当前目标、排除名单）",
+      inputSchema: {},
+    },
+    async () => {
+      try {
+        const bot = requireBot();
+        return jsonResult(getAttackStatus(bot));
+      } catch (err) {
+        return handleToolError(err);
+      }
+    },
+  );
+
+  server.registerTool(
+    "mc_attack_exclude",
+    {
+      description: "管理攻击排除名单（默认含 villager、wandering_trader、cat）",
+      inputSchema: {
+        action: z.enum(["list", "add", "remove", "set", "clear"]).describe("操作类型"),
+        names: z
+          .array(z.string().min(1))
+          .optional()
+          .describe("生物/玩家英文名列表；add/remove/set 时需要"),
+      },
+    },
+    async ({ action, names }) => {
+      try {
+        const bot = requireBot();
+        const result = setAttackExclude(bot, { action, names });
+        return jsonResult(result);
       } catch (err) {
         return handleToolError(err);
       }
@@ -440,7 +556,12 @@ export function registerBotPrompts(server: McpServer): void {
                 "- mc_follow_mob：跟随指定/最近生物",
                 "- mc_come_to_item：走到指定/最近掉落物身边",
                 "- mc_come_to_all_items：依次走到附近所有掉落物身边",
-                "- mc_stop_movement：停止移动",
+                "- mc_stop_movement：停止移动（不停攻击）",
+                "- mc_hit：单次挥砍（mode: players/mobs/hostile/friendly/neutral/named/all）",
+                "- mc_attack：持续攻击（低血优先，可设范围）",
+                "- mc_stop_attack：停止攻击",
+                "- mc_get_attack_status：查看攻击状态",
+                "- mc_attack_exclude：管理攻击排除名单",
                 "",
                 "操作前先调用 mc_get_status / mc_list_mobs / mc_list_items 确认环境，再执行动作。",
               ].join("\n"),

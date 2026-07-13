@@ -4,6 +4,7 @@ import { clearBot, setBot } from "./core/bot-registry";
 import { setupChat } from "./modules/chat";
 import { setupHealth } from "./modules/health";
 import { setupMovement } from "./modules/movement";
+import { setupAttack } from "./modules/attack";
 
 function log(msg: string): void {
   console.log(`[${new Date().toISOString()}] ${msg}`);
@@ -64,6 +65,7 @@ export function createBot(config: Config): Promise<Bot> {
         setupChat(bot, config.commandPrefix);
         setupHealth(bot);
         setupMovement(bot, true);
+        setupAttack(bot);
 
         if (!resolved) {
           resolved = true;

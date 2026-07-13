@@ -1,8 +1,8 @@
 {
   "name": "hua-mc-bot",
-  "version": "0.1.0",
+  "version": "0.0.1",
   "private": true,
-  "description": "Mineflayer Minecraft Bot MVP",
+  "description": "Hua 我的世界机器人(ai支持)",
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
