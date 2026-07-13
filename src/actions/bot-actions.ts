@@ -132,9 +132,19 @@ export function getBotStatus(bot: Bot): BotStatus {
   };
 }
 
-export function getNearbyPlayers(bot: Bot): NearbyPlayer[] {
+function matchesFuzzy(haystack: string | undefined | null, needle: string): boolean {
+  if (!haystack) return false;
+  const h = haystack.trim().toLowerCase();
+  const n = needle.trim().toLowerCase();
+  if (!n) return true;
+  return h === n || h.includes(n);
+}
+
+export function getNearbyPlayers(bot: Bot, playerName?: string): NearbyPlayer[] {
+  const needle = playerName?.trim();
   return Object.values(bot.players)
     .filter((player) => player.username !== bot.username && player.entity)
+    .filter((player) => !needle || matchesFuzzy(player.username, needle))
     .map((player) => {
       const pos = player.entity!.position;
       return {
@@ -147,7 +157,8 @@ export function getNearbyPlayers(bot: Bot): NearbyPlayer[] {
 }
 
 /** 列出视野内附近生物及其坐标 */
-export function getNearbyMobs(bot: Bot, maxDistance?: number): NearbyMob[] {
+export function getNearbyMobs(bot: Bot, maxDistance?: number, mobName?: string): NearbyMob[] {
+  const needle = mobName?.trim();
   return Object.values(bot.entities)
     .filter((entity): entity is BotEntity => !!entity && isMobEntity(bot, entity))
     .map((entity) => {
@@ -165,11 +176,18 @@ export function getNearbyMobs(bot: Bot, maxDistance?: number): NearbyMob[] {
       };
     })
     .filter((mob) => maxDistance === undefined || (mob.distance !== null && mob.distance <= maxDistance))
+    .filter(
+      (mob) =>
+        !needle ||
+        matchesFuzzy(mob.name, needle) ||
+        matchesFuzzy(mob.displayName, needle),
+    )
     .sort((a, b) => (a.distance ?? Infinity) - (b.distance ?? Infinity));
 }
 
 /** 列出视野内附近掉落物及其坐标 */
-export function getNearbyItems(bot: Bot, maxDistance?: number): NearbyItem[] {
+export function getNearbyItems(bot: Bot, maxDistance?: number, itemName?: string): NearbyItem[] {
+  const needle = itemName?.trim();
   return Object.values(bot.entities)
     .filter((entity): entity is BotEntity => !!entity && entity !== bot.entity && isDroppedItem(entity))
     .map((entity) => {
@@ -186,6 +204,12 @@ export function getNearbyItems(bot: Bot, maxDistance?: number): NearbyItem[] {
       };
     })
     .filter((item) => maxDistance === undefined || (item.distance !== null && item.distance <= maxDistance))
+    .filter(
+      (item) =>
+        !needle ||
+        matchesFuzzy(item.name, needle) ||
+        matchesFuzzy(item.displayName, needle),
+    )
     .sort((a, b) => (a.distance ?? Infinity) - (b.distance ?? Infinity));
 }
 
